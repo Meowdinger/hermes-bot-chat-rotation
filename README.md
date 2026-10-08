@@ -1,64 +1,57 @@
 # hermes-bot-chat-rotation
 
-A [Hermes Agent](https://hermes-agent.nousresearch.com/docs/) **skill** for rotating a bot's main conversation.
+一个 [Hermes Agent](https://hermes-agent.nousresearch.com/docs/) **技能（skill）**：轮换 bot 的主对话。
 
-In Bot Mode every bot is a Hermes profile, and its main conversation is the session titled exactly `Bot Chat`
-(one per profile, no session-id pointer). This skill retires the current one and opens a fresh one **whose first
-turn reads the archived conversation**, so the new chat starts with context instead of amnesia.
+Bot Mode 下每个 bot 就是一个 Hermes profile，它的主对话是**标题正好为 `Bot Chat`** 的那条会话（每个 profile 一条，没有会话 id 指针）。
+本技能把当前这条退休，并新开一条**第一件事就是读完旧对话**的主对话——新对话带着上下文开始，而不是失忆重来。
 
-## What it does
+## 它做什么
 
-For each bot (or the ones you name):
+对每个 bot（或你指定的那几个）：
 
-1. **Archive** the current `Bot Chat` (`session.archive`) — messages kept, session retired.
-   The archived row keeps its history but gives up the name, so from then on it is reachable **by session id only**.
-2. **Mint a fresh `Bot Chat`** (`session.create` with the exact title, born hidden, following the profile's own
-   config) and set the title immediately so the registry has exactly one `Bot Chat` row.
-3. **Submit an opening turn** that tells the new chat to read the archived conversation
-   (`session_search(session_id="<old id>")`) and write a short handoff record, then carry on from there.
+1. **归档**当前 `Bot Chat`（`session.archive`）——消息全部保留，会话退休。归档行仍留有历史，但让出了名字，
+   此后**只能按会话 id** 找到它。
+2. **新建一条同名 `Bot Chat`**（`session.create`，标题正好 `Bot Chat`、born hidden、跟随该 profile 自身配置），
+   并立刻落标题，保证注册表里 `Bot Chat` 永远只有一行。
+3. **投一句开场指令**：让新对话读取已归档的那条（`session_search(session_id="<旧 id>")`），写一份简短承接记录，再往下走。
 
-Everything goes through the **desktop backend's JSON-RPC** (`hermes serve`, the same channel the Bots pane uses),
-so the new chats are real desktop Bot Chats — *not* one-shot CLI sessions, which would not be the bot's main chat.
+全程走**桌面后端的 JSON-RPC**（`hermes serve`，也就是 Bots 面板点击用的同一条通道），所以新会话是真正的桌面 Bot Chat，
+不是 one-shot CLI 会话——后者不会成为 bot 的主对话。
 
-## Install
+## 安装
 
-Copy this folder into a profile's skills directory — profiles are isolated, so copy it into each bot that should
-have it:
+把这个目录拷进某个 profile 的 skills 目录。**profiles 之间互不继承**，要让多个 bot 都能用就逐个拷：
 
 ```bash
 cp -r hermes-bot-chat-rotation ~/.hermes/profiles/<bot>/skills/autonomous-ai-agents/
-# Windows default install: %LOCALAPPDATA%\hermes\profiles\<bot>\skills\autonomous-ai-agents\
+# Windows 默认安装：%LOCALAPPDATA%\hermes\profiles\<bot>\skills\autonomous-ai-agents\
 ```
 
-## Requirements
+## 前提
 
-- A running Hermes backend on the same machine: the desktop app, or any `hermes serve` process (the script only
-  talks to `127.0.0.1`).
-- Python with `websockets` for the actual call. Running with a plain `python` is fine — if `websockets` is missing,
-  the script re-execs itself into the Hermes venv Python.
-- Optional overrides when discovery fails: `HERMES_PYTHON`, `HERMES_DESKTOP_URL`, `HERMES_SESSION_TOKEN`.
+- 同一台机器上跑着 Hermes 后端：桌面应用，或任何 `hermes serve` 进程（脚本只连 `127.0.0.1`）。
+- Python 带 `websockets`。用普通 `python` 跑也可以——缺 `websockets` 时脚本会自己 re-exec 到 Hermes venv 的 Python。
+- 探测失灵时可覆盖：`HERMES_PYTHON`、`HERMES_DESKTOP_URL`、`HERMES_SESSION_TOKEN`。
 
-## Usage
+## 用法
 
 ```bash
-python scripts/rotate_bot_chats.py --dry-run         # show which bots would be rotated
-python scripts/rotate_bot_chats.py                   # every profile on this machine
-python scripts/rotate_bot_chats.py research steward  # only these profiles
-python scripts/rotate_bot_chats.py --no-prompt       # archive + open fresh, no opening turn
+python scripts/rotate_bot_chats.py --dry-run         # 先看会动哪些 bot
+python scripts/rotate_bot_chats.py                   # 本机全部 profile
+python scripts/rotate_bot_chats.py research steward  # 只动这几个 profile
+python scripts/rotate_bot_chats.py --no-prompt       # 只归档 + 建新，不投开场句
 ```
 
-The script then prints its own verification: the RPC view (`session.list` for the title, `profiles.list`
-canonical session) and, when the profile's `state.db` is on this machine, the two database rows
-(`old: archived=1, title NULL` / `new: title='Bot Chat', hidden=1, source='desktop'`).
+跑完脚本自己打印核验：RPC 侧（按标题查 `session.list`、`profiles.list` 的 canonical 会话）+
+找得到 `state.db` 时再直读两行（旧行 `archived=1, title NULL`；新行 `title='Bot Chat', hidden=1, source='desktop'`）。
 
-The opening instruction lives in `OPENING` at the top of the script — edit it there (language, handoff format)
-instead of rewriting the skill.
+开场指令模板在脚本顶部的 `OPENING`——要改语言或承接记录的格式，改那里，不用改技能正文。
 
-## Also a valid Hermes skill
+## 也就是一个标准 Hermes skill
 
-`SKILL.md` is a normal Hermes skill file: drop the folder where your skills live and the agent will load it
-when the user asks for a bot-chat rotation. This repo is just the same skill, distributed.
+`SKILL.md` 是标准的 Hermes 技能文件：把这个目录放进你的 skills 目录，用户在对话里说「轮换 bot 主对话」时 agent 就会加载它。
+本仓库就是这个技能，只是单独发布。
 
-## License
+## 许可
 
-MIT — see [LICENSE](LICENSE).
+MIT，见 [LICENSE](LICENSE)。
