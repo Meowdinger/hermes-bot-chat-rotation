@@ -1,6 +1,6 @@
 ---
 name: bot-chat-rotation
-description: "Archive bot chats and open fresh ones that read them."
+description: "归档 bot 的主对话，另开一条会读旧对话的新主对话。"
 version: 0.1.0
 author: meowdinger, Hermes Agent
 license: MIT
