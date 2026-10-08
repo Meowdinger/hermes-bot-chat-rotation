@@ -23,6 +23,7 @@ metadata:
 
 ## 本质
 
+- **默认只动脚本自己所在的 profile**（发给哪个 bot，就重置哪个）。每个 bot 的 skills 目录各有一份脚本，不带参数运行时目标就是它自己（HERMES_HOME，回退看安装路径）；全机轮换必须显式 `--all`。
 - **Bot Chat 的身份 = (profile, 标题正好是 `Bot Chat`)**，没有 id 指针。用 `session.create {title:'Bot Chat', hidden:true, follow_profile_config:true}` 建，随后 `session.title` 立刻落标题——行是懒建的，不落标题就会开出第二条。
 - **顺序：先归档旧行，再给新行落标题。** 标题事务会把「已归档且 hidden」的旧行 title 置 NULL，注册名让给新行。所以归档后旧对话**只能按 id 读，按标题已找不到**——承接指令里必须写 id。
 - **新会话的第一句就是承接指令**（`session_search(session_id=<旧 id>)`）。不投这句，新主对话就是空的。
@@ -32,9 +33,10 @@ metadata:
 
 ```bash
 # 用 Hermes venv 的 python 最好；系统 python 直接跑也行——脚本自己 re-exec 到 venv，找不到才报错。
-python "<skill>/scripts/rotate_bot_chats.py" --dry-run         # 先看会动谁
+python "<skill>/scripts/rotate_bot_chats.py" --dry-run         # 先看会动谁（默认：本 profile）
+python "<skill>/scripts/rotate_bot_chats.py"                   # 轮换本 profile——发给哪个 bot 就重置哪个
 python "<skill>/scripts/rotate_bot_chats.py" research steward  # 指定 profile
-python "<skill>/scripts/rotate_bot_chats.py"                   # 该机器全部 profile
+python "<skill>/scripts/rotate_bot_chats.py" --all             # 本机全部（显式全量）
 ```
 
 脚本一条龙：找后端端口/token → `profiles.list` 取各 profile 的 `canonical_session` → `session.archive` → `session.create` → `session.title` → 回读 state.db（找得到就读，找不到只给 RPC 侧）核验 → `prompt.submit` 首句承接指令。首句模板在脚本顶部 `OPENING`，要改承接要求就改它。

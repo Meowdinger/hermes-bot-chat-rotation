@@ -7,7 +7,7 @@ Bot Mode 下每个 bot 就是一个 Hermes profile，它的主对话是**标题�
 
 ## 它做什么
 
-对每个 bot（或你指定的那几个）：
+默认**只动脚本所在的那个 profile**——哪个 bot 收到指令，就重置哪个；全机轮换要显式 `--all`。对每个目标 bot：
 
 1. **归档**当前 `Bot Chat`（`session.archive`）——消息全部保留，会话退休。归档行仍留有历史，但让出了名字，
    此后**只能按会话 id** 找到它。
@@ -36,10 +36,11 @@ cp -r hermes-bot-chat-rotation ~/.hermes/profiles/<bot>/skills/autonomous-ai-age
 ## 用法
 
 ```bash
-python scripts/rotate_bot_chats.py --dry-run         # 先看会动哪些 bot
-python scripts/rotate_bot_chats.py                   # 本机全部 profile
+python scripts/rotate_bot_chats.py --dry-run         # 先看会动哪些 bot（默认：本 profile）
+python scripts/rotate_bot_chats.py                   # 轮换本 profile——发给哪个 bot 就重置哪个
 python scripts/rotate_bot_chats.py research steward  # 只动这几个 profile
-python scripts/rotate_bot_chats.py --no-prompt       # 只归档 + 建新，不投开场句
+python scripts/rotate_bot_chats.py --all             # 本机全部（显式全量）
+python scripts/rotate_bot_chats.py --no-prompt       # 附加：只归档 + 建新，不投开场句
 ```
 
 跑完脚本自己打印核验：RPC 侧（按标题查 `session.list`、`profiles.list` 的 canonical 会话）+

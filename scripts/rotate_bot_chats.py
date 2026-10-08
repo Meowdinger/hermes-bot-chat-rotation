@@ -7,15 +7,17 @@
 跨机器/跨 profile 通用：profile 名单从后端 roster 取；后端端口自己找；缺 websockets 时自动
 re-exec 到 Hermes venv 的 python。
 
-用法：
-    python rotate_bot_chats.py --dry-run         # 只看会动谁
-    python rotate_bot_chats.py                   # 该机器全部 profile
+用法（默认只重置脚本所在的那个 profile——发给哪个 bot 就重置哪个）：
+    python rotate_bot_chats.py --dry-run         # 只看会动谁（默认：本 profile）
+    python rotate_bot_chats.py                   # 轮换本 profile
     python rotate_bot_chats.py research steward  # 指定 profile
-    python rotate_bot_chats.py --no-prompt       # 只归档 + 建新
+    python rotate_bot_chats.py --all             # 本机全部 profile（显式全量）
+    python rotate_bot_chats.py --no-prompt       # 附加：只归档 + 建新，不投开场句
 环境变量（可选）：HERMES_PYTHON / HERMES_DESKTOP_URL / HERMES_SESSION_TOKEN
 """
 import json
 import os
+import pathlib
 import re
 import shutil
 import sqlite3
@@ -46,6 +48,20 @@ def hermes_home():
     if local and os.path.isdir(os.path.join(local, "hermes")):
         return os.path.join(local, "hermes")
     return os.path.expanduser("~/.hermes")
+
+
+def current_profile():
+    """The profile this script belongs to: each bot runs ITS OWN copy, so the default target is 'me'."""
+    env = os.environ.get("HERMES_HOME")
+    if env:
+        home = os.path.abspath(env)
+        return os.path.basename(home) if os.path.basename(os.path.dirname(home)) == "profiles" else "default"
+    # No HERMES_HOME: read it off the install path …/<home>/skills/<category>/<skill>/scripts/
+    for parent in pathlib.Path(__file__).resolve().parents:
+        if parent.name == "skills":
+            home = parent.parent
+            return os.path.basename(home) if os.path.basename(os.path.dirname(home)) == "profiles" else "default"
+    return None
 
 
 def has_websockets(python=None):
@@ -170,6 +186,7 @@ def main():
     argv = sys.argv[1:]
     dry = "--dry-run" in argv
     no_prompt = "--no-prompt" in argv
+    all_flag = "--all" in argv
     want = [a for a in argv if not a.startswith("--")]
 
     from websockets.sync.client import connect
@@ -193,7 +210,19 @@ def main():
         return ((found.get("result") or {}).get("sessions") or [None])[0]
 
     roster = (call("profiles.list").get("result") or {}).get("profiles") or []
-    bots = [p["name"] for p in roster if not want or p["name"] in want]
+    names = [p["name"] for p in roster]
+    if want:
+        bots = [b for b in names if b in want]
+        for miss in (b for b in want if b not in names):
+            print(f"跳过 {miss}：不在后端 roster 里")
+    elif all_flag:
+        bots = names
+    else:
+        me = current_profile()
+        if me not in names:
+            raise SystemExit(f"本 profile（{me}）不在后端 roster 里；请显式传名字，或 --all。")
+        bots = [me]
+    print(f"目标：{', '.join(bots) if bots else '(空)'}")
     rows = []
     for bot in bots:
         entry = {"bot": bot}
